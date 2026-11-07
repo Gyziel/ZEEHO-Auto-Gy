@@ -3,11 +3,11 @@ name: ZEEHO Auto Gy
 on:
   workflow_dispatch:
   schedule:
-    # 北京时间每天中午 12:07 主签到，12:37 兜底。
-    # GitHub Actions 采用 UTC：04:07 / 04:37 UTC = 12:07 / 12:37 CST (UTC+8)。
+    # 北京时间每天 14:00 主签到，14:30 兜底。
+    # GitHub Actions 采用 UTC：06:00 / 06:30 UTC = 14:00 / 14:30 CST (UTC+8)。
     # 定时调度可能延迟；同日真实签到成功后，兜底任务自动跳过。
-    - cron: "7 4 * * *"
-    - cron: "37 4 * * *"
+    - cron: "0 6 * * *"
+    - cron: "30 6 * * *"
 
 permissions:
   contents: read

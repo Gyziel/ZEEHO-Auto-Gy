@@ -55,18 +55,28 @@ jobs:
           fi
 
           TODAY="$(TZ=Asia/Shanghai date +%F)"
-          # 仅信任同一工作流代码提交的成功执行；旧版误报成功的运行不会误拦截。
-          # GitHub Actions 的 success 仅在下方签到验证通过时才成立。
-          SUCCESS_COUNT="$(
+          # 检查当天成功运行是否真的通过「核验真实签到」步骤，而非只看工作流绿色状态。
+          # 不按提交 SHA 过滤，避免更新工作流后漏掉今天已完成的签到。
+          CANDIDATE_RUNS="$(
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/zeeho.yml/runs?status=success&per_page=100" \
-              | jq --arg today "$TODAY" --arg sha "$GITHUB_SHA" '
-                  [.workflow_runs[]
-                    | select(.head_sha == $sha)
-                    | select(.event == "schedule" or .event == "workflow_dispatch")
-                    | select(.run_started_at != null)
-                    | select((.run_started_at | fromdateiso8601 + 28800 | strftime("%Y-%m-%d")) == $today)
-                  ] | length'
+              | jq -r --arg today "$TODAY" '
+                  .workflow_runs[]
+                  | select(.event == "schedule" or .event == "workflow_dispatch")
+                  | select(.run_started_at != null)
+                  | select((.run_started_at | fromdateiso8601 + 28800 | strftime("%Y-%m-%d")) == $today)
+                  | .id'
           )"
+          SUCCESS_COUNT=0
+          while IFS= read -r RUN_ID; do
+            [ -n "$RUN_ID" ] || continue
+            JOBS_JSON="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100")"
+            if jq -e '[.jobs[] | .steps[]? | select(.name == "核验真实签到并生成安全报告" and .conclusion == "success")] | length > 0' \
+              <<< "$JOBS_JSON" >/dev/null; then
+              echo "找到当天已核验签到的运行：$RUN_ID"
+              SUCCESS_COUNT=1
+              break
+            fi
+          done <<< "$CANDIDATE_RUNS"
           if [ "$SUCCESS_COUNT" -gt 0 ]; then
             echo "北京时间 $TODAY 已有核验通过的签到，跳过本次兜底。"
             echo "run=false" >> "$GITHUB_OUTPUT"

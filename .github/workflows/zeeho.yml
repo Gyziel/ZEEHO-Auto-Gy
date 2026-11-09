@@ -3,11 +3,11 @@ name: ZEEHO Auto Gy
 on:
   workflow_dispatch:
   schedule:
-    # 北京时间每天 14:00 主签到，14:30 兜底。
-    # GitHub Actions 采用 UTC：06:00 / 06:30 UTC = 14:00 / 14:30 CST (UTC+8)。
-    # 定时调度可能延迟；同日真实签到成功后，兜底任务自动跳过。
-    - cron: "0 6 * * *"
-    - cron: "30 6 * * *"
+    # 北京时间每天 12:07 主签到，12:37 兜底，避开整点高峰。
+    # GitHub Actions 使用 UTC：04:07 / 04:37 UTC = 12:07 / 12:37 CST (UTC+8)。
+    # 定时任务可能延迟；同日真实签到成功后，兜底任务自动跳过。
+    - cron: "7 4 * * *"
+    - cron: "37 4 * * *"
 
 permissions:
   contents: read
@@ -41,6 +41,16 @@ jobs:
           # 手动执行始终允许运行，便于修复后主动验证。
           if [ "$GITHUB_EVENT_NAME" != "schedule" ]; then
             echo "手动任务：执行签到校验。"
+            exit 0
+          fi
+
+          # GitHub schedule 可能在午夜之后才启动前一天的任务。
+          # 每天计划时段为中午；凌晨至 11:59 的定时触发一律跳过，
+          # 避免把前一天迟到的任务误认为新一天签到。手动执行不受影响。
+          NOW_CST="$(TZ=Asia/Shanghai date +%H:%M)"
+          if [[ "$NOW_CST" < "12:00" ]]; then
+            echo "北京时间 $NOW_CST：定时任务发生在中午前，判定为跨日期延迟，跳过签到和邮件。"
+            echo "run=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
